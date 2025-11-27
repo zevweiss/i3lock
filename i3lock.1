@@ -151,6 +151,20 @@ Show the number of failed attempts, if any.
 Show the current keyboard layout.
 
 .TP
+.BI \-T\  timeout \fR,\ \fB\-\-idle-timeout= timeout
+Set the idle timeout duration to the given number of seconds.  If
+i3lock receives no keypresses for the specified duration, the input
+buffer is cleared and an optional command is executed (see
+.B \-\-idle-timeout-command\fR).  If unspecified, the default is
+180 seconds.
+
+.TP
+.BI \-C\  command \fR,\ \fB\-\-idle-timeout-command= command
+A shell command to run when the
+.B \-\-idle-timeout
+duration expires.
+
+.TP
 .B \-\-debug
 Enables debug logging.
 Note, that this will log the password used for authentication to stdout.

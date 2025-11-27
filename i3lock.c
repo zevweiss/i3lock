@@ -21,6 +21,7 @@
 #include <err.h>
 #include <errno.h>
 #include <assert.h>
+#include <math.h>
 #ifdef __OpenBSD__
 #include <bsd_auth.h>
 #else
@@ -76,13 +77,16 @@ static bool dont_fork = false;
 struct ev_loop *main_loop;
 static struct ev_timer *clear_auth_wrong_timeout;
 static struct ev_timer *clear_indicator_timeout;
-static struct ev_timer *discard_passwd_timeout;
+static struct ev_timer *idle_timeout;
 extern unlock_state_t unlock_state;
 extern auth_state_t auth_state;
 int failed_attempts = 0;
 bool show_failed_attempts = false;
 bool show_keyboard_layout = false;
 bool retry_verification = false;
+
+static const char *idle_timeout_command = NULL;
+static float idle_timeout_time = 180.0;
 
 struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
@@ -270,9 +274,14 @@ static void clear_input(void) {
     password[input_position] = '\0';
 }
 
-static void discard_passwd_cb(EV_P_ ev_timer *w, int revents) {
+static void idle_timeout_cb(EV_P_ ev_timer *w, int revents) {
     clear_input();
-    STOP_TIMER(discard_passwd_timeout);
+    clear_indicator();
+    if (idle_timeout_command) {
+        DEBUG("running idle-timeout-command '%s'", idle_timeout_command);
+        system(idle_timeout_command);
+    }
+    STOP_TIMER(idle_timeout);
 }
 
 static void input_done(void) {
@@ -372,6 +381,8 @@ static void handle_key_press(xcb_key_press_event_t *event) {
     int n;
     bool ctrl;
     bool composed = false;
+
+    START_TIMER(idle_timeout, TSTAMP_N_SECS(idle_timeout_time), idle_timeout_cb);
 
     ksym = xkb_state_key_get_one_sym(xkb_state, event->detail);
     ctrl = xkb_state_mod_name_is_active(xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_DEPRESSED);
@@ -517,7 +528,6 @@ static void handle_key_press(xcb_key_press_event_t *event) {
         STOP_TIMER(clear_indicator_timeout);
     }
 
-    START_TIMER(discard_passwd_timeout, TSTAMP_N_MINS(3), discard_passwd_cb);
 }
 
 /*
@@ -1034,10 +1044,12 @@ int main(int argc, char *argv[]) {
         {"inactivity-timeout", required_argument, NULL, 'I'},
         {"show-failed-attempts", no_argument, NULL, 'f'},
         {"show-keyboard-layout", no_argument, NULL, 'k'},
+        {"idle-timeout", required_argument, NULL, 'T'},
+        {"idle-timeout-command", required_argument, NULL, 'C'},
         {NULL, no_argument, NULL, 0}};
 
     int code = EXIT_FAILURE;
-    char *optstring = "hvnbdc:p:ui:teI:fk";
+    char *optstring = "hvnbdc:p:ui:teI:fkTC";
     while ((o = getopt_long(argc, argv, optstring, longopts, &longoptind)) != -1) {
         switch (o) {
             case 'v':
@@ -1102,6 +1114,14 @@ int main(int argc, char *argv[]) {
                 break;
             case 'k':
                 show_keyboard_layout = true;
+                break;
+            case 'T':
+                if (sscanf(optarg, "%f", &idle_timeout_time) != 1 || !isfinite(idle_timeout_time) || idle_timeout_time <= 0.0) {
+                    errx(EXIT_FAILURE, "invalid idle timeout, must be finite positive numeric value");
+                }
+                break;
+            case 'C':
+                idle_timeout_command = optarg;
                 break;
             case 'h':
                 code = EXIT_SUCCESS;
@@ -1317,6 +1337,8 @@ int main(int argc, char *argv[]) {
 
     ev_prepare_init(xcb_prepare, xcb_prepare_cb);
     ev_prepare_start(main_loop, xcb_prepare);
+
+    START_TIMER(idle_timeout, TSTAMP_N_SECS(idle_timeout_time), idle_timeout_cb);
 
     /* Invoke the event callback once to catch all the events which were
      * received up until now. ev will only pick up new events (when the X11
