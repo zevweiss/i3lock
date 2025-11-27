@@ -151,6 +151,27 @@ Show the number of failed attempts, if any.
 Show the current keyboard layout.
 
 .TP
+.BI \-T\  timeout \fR,\ \fB\-\-idle-timeout= timeout
+Set the idle timeout duration to the given number of seconds.  If
+i3lock receives no keypresses for the specified duration, the input
+buffer is cleared, and on Linux the suspend power state specified by
+.B \-\-idle-suspend-power-state
+is applied if set.  If unspecified, the default is 180 seconds.
+
+.TP
+.BI \-S\  state \fR,\ \fB\-\-idle-suspend-power-state= state
+On Linux, this specifies a suspend power state such as \(aqfreeze',
+\(aqmem', or \(aqdisk' to be written to
+.IR /sys/power/state
+when the duration specified by
+.B \-\-idle-timeout
+expires.  Note that in order to use this the ownership and/or
+permissions of
+.IR /sys/power/state
+will need to be altered to allow write access to the invoking user (by
+default it is only writable by root).
+
+.TP
 .B \-\-debug
 Enables debug logging.
 Note, that this will log the password used for authentication to stdout.
